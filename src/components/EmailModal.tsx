@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { CompanyInputs, CalculationResults } from '../types/calculator';
 import { generatePDFReport } from '../utils/pdfGenerator';
+import { uploadPDFToCloudinary } from '../utils/uploadPDF';
 import { submitResults } from '../utils/api';
 
 interface EmailModalProps {
@@ -24,32 +25,26 @@ export default function EmailModal({ isOpen, onClose, inputs, results }: EmailMo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    console.log('submitting..')
 
     try {
       // Generate PDF first
       const pdfBlob = await generatePDFReport(inputs, results, formData);
-      const pdfUrl = URL.createObjectURL(pdfBlob);
+      // 2. Upload PDF to Cloudinary
+      const pdfUrl = await uploadPDFToCloudinary(pdfBlob);
+      console.log('PDF uploaded to:', pdfUrl);
 
-      // Submit to Airtable
-      const submitResponse = await submitResults(inputs, results, formData);
 
-      if (!submitResponse.success) {
-        // Always show the PDF in demo mode or error cases
-        window.open(pdfUrl);
+      // 3. Submit to Airtable with PDF URL
+      const submittedResults = await submitResults(inputs, results, formData, 0, pdfUrl);
+      console.log(submittedResults);
 
-        if (submitResponse.error?.includes('Demo mode')) {
-          alert('Your report has been generated and opened in a new tab! Email delivery is not available in demo mode.');
-        } else {
-          alert('Your report has been generated and opened in a new tab! However, there was an error sending it via email.');
-        }
-        onClose();
-        return;
+      if (submittedResults.success) {
+        alert('Report submitted successfully!');
+        // Optionally, reset the form or redirect the user
+      } else {
+        alert(`Submission failed: ${submittedResults.error}`);
       }
-
-      // Success case - both PDF and email sent
-      window.open(pdfUrl);
-      alert('Report has been sent to your email!');
-      onClose();
     } catch (error) {
       console.error('Error processing submission:', error);
       alert('There was an error generating your report. Please try again.');

@@ -17,14 +17,17 @@ export async function submitResults(
   inputs: CompanyInputs,
   results: CalculationResults,
   userData: UserData,
-  retryCount = 0
+  retryCount = 0,
+  pdfUrl: string,
 ): Promise<SubmitResponse> {
   try {
     const apiKey = import.meta.env.VITE_AIRTABLE_API_KEY?.trim();
     const baseId = import.meta.env.VITE_AIRTABLE_BASE_ID?.trim();
+    console.log(apiKey)
+    console.log(baseId)
 
     // Early check for demo mode
-    if (!apiKey || !baseId || apiKey === 'undefined' || baseId === 'undefined' || apiKey.startsWith('pat')) {
+    if (!apiKey || !baseId || apiKey === 'undefined' || baseId === 'undefined') {
       return {
         success: false,
         error: 'Demo mode: Report generation only. Email delivery is not available in demo mode.'
@@ -41,30 +44,38 @@ export async function submitResults(
     }
 
     const base = new Airtable({ apiKey }).base(baseId);
+    const fieldData = {
+      // Company Information
+      'Number of Stores': inputs.numberOfStores,
+      'Associates per Store': inputs.associatesPerStore,
+      'Current Retention Rate': inputs.currentRetentionRate * 100,
+      'Average Transaction Value': Number(inputs.averageTransactionValue) || 0,
+      'Customer Satisfaction Score': Number(inputs.customerSatisfactionScore) || 0,
+      // Cost Savings Results
+      'Annual Hiring Needs': results.totalNewAssociates,
+      'Current Recruiting Costs': results.totalNewAssociates * inputs.recruitingCostPerHire,
+      'Projected Savings': results.totalSavings,
+      // Revenue Impact (if available)
+      'Customer Experience Impact': Number(results.revenueImpact?.customerExperience) || 0,
+      'Team Expertise Value': Number(results.revenueImpact?.teamExpertise) || 0,
+      'Customer Loyalty Benefit': Number(results.revenueImpact?.customerLoyalty) || 0,
+      // User Information
+      'Name': userData.name,
+      'Email': userData.email,
+      'Organization': userData.organization,
+      'Submission Date': new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
+      // Attachment Field
+      'Report PDF': [
+        {
+          url: pdfUrl,
+        },
+      ],
+    };
+    console.log(fieldData)
 
-    const record = await base('ROI Calculator Results').create([
+    const record = await base('Contacts').create([
       {
-        fields: {
-          // Company Information
-          'Number of Stores': inputs.numberOfStores,
-          'Associates per Store': inputs.associatesPerStore,
-          'Current Retention Rate': inputs.currentRetentionRate * 100,
-          'Average Transaction Value': Number(inputs.averageTransactionValue) || 0,
-          'Customer Satisfaction Score': Number(inputs.customerSatisfactionScore) || 0,
-          // Cost Savings Results
-          'Annual Hiring Needs': results.totalNewAssociates,
-          'Current Recruiting Costs': results.totalNewAssociates * inputs.recruitingCostPerHire,
-          'Projected Savings': results.totalSavings,
-          // Revenue Impact (if available)
-          'Customer Experience Impact': Number(results.revenueImpact?.customerExperience) || 0,
-          'Team Expertise Value': Number(results.revenueImpact?.teamExpertise) || 0,
-          'Customer Loyalty Benefit': Number(results.revenueImpact?.customerLoyalty) || 0,
-          // User Information
-          'Name': userData.name,
-          'Email': userData.email,
-          'Organization': userData.organization,
-          'Submission Date': new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
-        }
+        fields: fieldData,
       }
     ]);
 
